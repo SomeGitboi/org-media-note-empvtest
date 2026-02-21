@@ -5,7 +5,7 @@
 
 ;;; Code:
 ;;;; Requirements
-(require 'mpv)
+(require 'empv)
 (require 'org)
 
 (require 'cl-lib)
@@ -19,6 +19,14 @@
 
 (declare-function org-media-note-cite--file-path "org-media-note-cite" (key))
 (declare-function org-media-note-cite--url "org-media-note-org-cite" (key))
+
+;;;; Helpers
+
+(defun org-media-note--get-property (prop)
+  "Get media player property PROP synchronously via empv.
+Returns nil if empv is not running or the property is unavailable."
+  (when (empv--running?)
+    (empv--send-command-sync (list "get_property" prop))))
 
 ;;;; Constants
 
@@ -280,11 +288,11 @@ according to `org-media-note-timestamp-pattern'."
 
 (defun org-media-note--get-duration-timestamp ()
   "Get the current media duration timestamp according to `org-media-note-timestamp-pattern'."
-  (org-media-note--seconds-to-timestamp (mpv-get-duration)))
+  (org-media-note--seconds-to-timestamp (org-media-note--get-property "duration")))
 
 (defun org-media-note--get-current-timestamp ()
   "Get current media timestamp according to `org-media-note-timestamp-pattern'."
-  (let ((position (mpv-get-playback-position)))
+  (let ((position (org-media-note--get-property "time-pos")))
     (if position
         (org-media-note--seconds-to-timestamp position)
       nil)))
@@ -319,7 +327,7 @@ Uses `org-media-note-ref-key-process-fn' to process the raw key."
 
 (defun org-media-note--current-media-type ()
   "Get current playing media type."
-  (let* ((file-path (mpv-get-property "path")))
+  (let* ((file-path (org-media-note--get-property "path")))
     (if (org-media-note--online-video-p file-path)
         "video" ;; TODO online audio?
       (org-media-note--file-media-type file-path))))
@@ -538,7 +546,7 @@ This list includes the following elements:
 - Media file path
 - Media file name
 - Timestamp"
-  (let* ((path (mpv-get-property "path"))
+  (let* ((path (org-media-note--get-property "path"))
          (escaped-path (when path (org-link-escape path))) ; Escape file path, thanks @v-Nyo  #66
          (name (if (and path (org-media-note-ref-cite-p))
                    (let* ((ref-key (org-media-note--current-citation-key))
@@ -546,7 +554,7 @@ This list includes the following elements:
                      title)
                  (when path
                    (if (org-media-note--online-video-p path)
-                       (mpv-get-property "media-title")
+                       (org-media-note--get-property "media-title")
                      nil))))
          (timestamp (org-media-note--get-current-timestamp)))
     (list (if (and path (org-media-note--online-video-p path))
@@ -568,10 +576,10 @@ This list includes the following elements:
                       (t ""))))
       (if file-path
           ;; Title when mpv is playing media
-          (let ((speed (mpv-get-property "speed"))
-                (volume (mpv-get-property "volume"))
+          (let ((speed (org-media-note--get-property "speed"))
+                (volume (org-media-note--get-property "volume"))
                 (total-timestamp (org-media-note--get-duration-timestamp))
-                (remaining-hms (org-media-note--seconds-to-timestamp (mpv-get-property "playtime-remaining"))))
+                (remaining-hms (org-media-note--seconds-to-timestamp (org-media-note--get-property "playtime-remaining"))))
             (concat icon
                     " org-media-note: "
                     current-timestamp
@@ -616,8 +624,8 @@ This list includes the following elements:
        (t "Open media")))))
 
 (defun org-media-note--ui-ab-loop-title ()
-  (let ((time-a (mpv-get-property "ab-loop-a"))
-        (time-b (mpv-get-property "ab-loop-b")))
+  (let ((time-a (org-media-note--get-property "ab-loop-a"))
+        (time-b (org-media-note--get-property "ab-loop-b")))
     (if (org-media-note--ab-loop-p)
         (concat "Clear AB-loop "
                 (org-media-note--ui-hightlight (format "(%s-%s)"
@@ -747,7 +755,7 @@ This list includes the following elements:
     (when (eq org-media-note-cursor-start-position 'before)
       (goto-char point))
     (when org-media-note-pause-after-insert-link
-      (mpv-pause))))
+      (empv-toggle))))
 
 (defun org-media-note--link ()
   "Return media link."
@@ -759,8 +767,8 @@ This list includes the following elements:
                        (org-media-note--current-media-type))))
       (if (org-media-note--ab-loop-p)
           ;; ab-loop link
-          (let ((time-a (org-media-note--seconds-to-timestamp (mpv-get-property "ab-loop-a")))
-                (time-b (org-media-note--seconds-to-timestamp (mpv-get-property "ab-loop-b"))))
+          (let ((time-a (org-media-note--seconds-to-timestamp (org-media-note--get-property "ab-loop-a")))
+                (time-b (org-media-note--seconds-to-timestamp (org-media-note--get-property "ab-loop-b"))))
             (format "[[%s:%s#%s-%s][%s]]"
                     link-type
                     (org-media-note--link-base-file file-path)
@@ -783,9 +791,9 @@ This list includes the following elements:
 
 (defun org-media-note--ab-loop-p ()
   "Whether in ab-loop?"
-  (let ((time-a (mpv-get-property "ab-loop-a"))
-        (time-b (mpv-get-property "ab-loop-b"))
-        (pos (mpv-get-playback-position)))
+  (let ((time-a (org-media-note--get-property "ab-loop-a"))
+        (time-b (org-media-note--get-property "ab-loop-b"))
+        (pos (org-media-note--get-property "time-pos")))
     (and (numberp time-a)
          (numberp time-b)
          (<= time-a pos)
@@ -851,7 +859,7 @@ Pass ARGS to ORIG-FN, `org-insert-item'."
     ;; 2. list is invisible
     ;; 3. no playing media
     (unless (or (not itemp)
-                (not (mpv-get-property "path"))
+                (not (org-media-note--get-property "path"))
                 (save-excursion
                   (goto-char itemp)
                   (org-invisible-p)))
@@ -877,7 +885,7 @@ Pass ARGS to ORIG-FN, `org-insert-item'."
      ((and itemp
            (goto-char itemp)
            (org-media-note--at-media-item-p)
-           (mpv-get-property "path"))
+           (org-media-note--get-property "path"))
       (let* ((struct (org-list-struct))
              (prevs (org-list-prevs-alist struct))
              (s (concat (org-media-note--link)
@@ -889,7 +897,7 @@ Pass ARGS to ORIG-FN, `org-insert-item'."
         (looking-at org-list-full-item-re)
         (move-end-of-line 1)
         (when org-media-note-pause-after-insert-link
-          (mpv-pause))
+          (empv-toggle))
         (when org-media-note-save-screenshot-p
           (org-media-note-insert-screenshot))))
      ;; In a list of another type, don't break anything: throw an error.
@@ -926,9 +934,8 @@ Pass ARGS to ORIG-FN, `org-insert-item'."
                                      media-path media-title current-timestamp nil org-media-note-screenshot-extension))
            (image-target-path (org-media-note--output-file-path image-file-name media-path media-title)))
       (if org-media-note-screenshot-with-sub
-          (mpv-run-command "screenshot-to-file" image-target-path)
-        (mpv-run-command "screenshot-to-file" image-target-path
-                         "video"))
+          (empv--send-command (list "screenshot-to-file" image-target-path))
+        (empv--send-command (list "screenshot-to-file" image-target-path "video")))
       (org-media-note--insert-file-link image-target-path)
       (org-media-note--display-inline-images))))
 
@@ -969,8 +976,8 @@ Generate OUTPUT-FILE from OUTPUT-FILE-SANS-EXT and return it."
   (interactive)
   (cl-multiple-value-bind (media-path media-title _)
       (org-media-note--current-media-info)
-    (let* ((time-a (org-media-note--seconds-to-timestamp (mpv-get-property "ab-loop-a")))
-           (time-b (org-media-note--seconds-to-timestamp (mpv-get-property "ab-loop-b")))
+    (let* ((time-a (org-media-note--seconds-to-timestamp (org-media-note--get-property "ab-loop-a")))
+           (time-b (org-media-note--seconds-to-timestamp (org-media-note--get-property "ab-loop-b")))
            (capture-function-name (if org-media-note-capture-ab-loop-ask-each-time
                                       (org-media-note--select-capture-function)
                                     org-media-note-default-capture-ab-loop-function-name))
@@ -994,7 +1001,7 @@ Generate OUTPUT-FILE from OUTPUT-FILE-SANS-EXT and return it."
   "Insert subtitle text."
   (interactive)
   (let ((sub-text (condition-case nil
-                      (mpv-get-property "sub-text")
+                      (org-media-note--get-property "sub-text")
                     (error nil))))
     (if sub-text
         (insert sub-text)
@@ -1003,12 +1010,12 @@ Generate OUTPUT-FILE from OUTPUT-FILE-SANS-EXT and return it."
 
 (defun org-media-note-adjust-timestamp-offset ()
   "Adjust all timestamps within the current heading.
-Aligns them to the current playing position in mpv."
+Aligns them to the current playing position in empv."
   (interactive)
-  (let ((current-playing-position (mpv-get-playback-position))
+  (let ((current-playing-position (org-media-note--get-property "time-pos"))
         (link (org-element-property :raw-link (org-element-context))))
     (unless current-playing-position
-      (error "Please use this function while mpv is playing"))
+      (error "Please use this function while empv is playing"))
     (unless link
       (error "Please place the cursor on a media-link"))
     (let* ((splitted (split-string link "#"))
@@ -1056,22 +1063,27 @@ TIME-A and TIME-B indicate the start and end of a playback loop."
                    (org-media-note--remove-utm-parameters file-path-or-url)
                  (expand-file-name file-path-or-url))))
     (if (not (string= path
-                      (mpv-get-property "path")))
+                      (org-media-note--get-property "path")))
         ;; file-path is not playing
         (progn
           (if time-a
               (message "open %s@t=%s..." path time-a)
             (message "open %s..." path))
-          (apply 'mpv-start
-                 path
-                 (org-media-note--build-mpv-args path time-a
-                                                 time-b)))
+          (let* ((args (org-media-note--build-mpv-args path time-a time-b))
+                 (options-str (when args
+                                (mapconcat (lambda (arg) (string-remove-prefix "--" arg))
+                                           args ","))))
+            (empv--run
+             (empv--send-command (if options-str
+                                     (list "loadfile" path "replace" 0 options-str)
+                                   (list "loadfile" path "replace"))))))
       ;; file-path is playing
       (org-media-note--seek-position-in-current-media-file
        time-a time-b))))
 
 (defun org-media-note--build-mpv-args (path time-a time-b)
-  "Build the argument list for `mpv-start`."
+  "Build the mpv options list for loading PATH via empv.
+Options include start position TIME-A and ab-loop bounds TIME-A/TIME-B."
   (let ((extra-mpv-options (org-media-note--mpv-options path)))
     (append (when time-a
               (list (concat "--start=+" time-a)))
@@ -1144,9 +1156,9 @@ Combine the following options:
 If TIME-B is non-nil, loop media between TIME-A and TIME-B."
   ;; TODO clear a-b loop when only one timestamp?
   (when time-b
-    (mpv-set-property "ab-loop-a" time-a)
-    (mpv-set-property "ab-loop-b" time-b))
-  (mpv-seek time-a))
+    (empv--send-command (list "set_property" "ab-loop-a" time-a))
+    (empv--send-command (list "set_property" "ab-loop-b" time-b)))
+  (empv--send-command (list "seek" time-a "absolute")))
 
 ;;;;; Online URL
 
