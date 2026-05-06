@@ -6,7 +6,7 @@
 ;; URL: https://github.com/yuchen-lea/org-media-note
 ;; Version: 1.12.0
 ;; Keywords: note-taking, multimedia, video
-;; Package-Requires: ((emacs "27.1") (transient "0.1.0") (mpv "0.2.0"))
+;; Package-Requires: ((emacs "27.1") (transient "0.1.0") (empv "4.0.0"))
 
 
 ;;; Commentary:
@@ -33,7 +33,7 @@
 (require 'transient)
 
 (require 'org-media-note-core)
-(require 'org-media-note-mpv)
+(require 'org-media-note-empv)
 (require 'org-media-note-import)
 (require 'org-media-note-obsidian)
 
@@ -65,10 +65,10 @@
                  ("T"
                   (lambda ()
                     (interactive)
-                    (mpv-cycle-property "ontop"))
+                    (empv--send-command '("cycle" "ontop")))
                   :description (lambda ()
                                  (concat "Ontop "
-                                         (org-media-note--ui-toggle-state (eq (mpv-get-property "ontop") t)))))
+                                         (org-media-note--ui-toggle-state (eq (org-media-note--get-property "ontop") t)))))
                  ("c" "Increase speed"
                   (lambda ()
                     (interactive)
@@ -92,14 +92,14 @@
                  ("m"
                   (lambda ()
                     (interactive)
-                    (mpv-cycle-property "mute"))
+                    (empv--send-command '("cycle" "mute")))
                   :description (lambda ()
                                  (concat "Mute "
-                                         (org-media-note--ui-toggle-state (eq (mpv-get-property "mute") t)))))]
+                                         (org-media-note--ui-toggle-state (eq (org-media-note--get-property "mute") t)))))]
                 ["Playback"
-                 ("<SPC>" mpv-pause
+                 ("<SPC>" empv-toggle
                   :description (lambda ()
-                                 (if (eq (mpv-get-property "pause") t)
+                                 (if (eq (org-media-note--get-property "pause") t)
                                      "Play"
                                    "Pause")))
                  ("tp" org-media-note-toggle-pause-after-insertion
@@ -109,7 +109,7 @@
                  ("l"
                   (lambda ()
                     (interactive)
-                    (mpv-run-command "ab-loop"))
+                    (empv--send-command '("ab-loop")))
                   :description org-media-note--ui-ab-loop-title)
                  ("g" "Jump to timestamp" org-media-note-goto-timestamp)
                  ""
@@ -134,19 +134,19 @@
                  ("C-<left>" "Previous subtitle"
                   (lambda ()
                     (interactive)
-                    (mpv-run-command "sub-seek" -1)))
+                    (empv--send-command '("sub-seek" -1))))
                  ("C-<right>" "Next subtitle"
                   (lambda ()
                     (interactive)
-                    (mpv-run-command "sub-seek" 1)))
+                    (empv--send-command '("sub-seek" 1))))
                  ("<prior>" "Previous Chapter"
                   (lambda ()
                     (interactive)
-                    (mpv-run-command "add" "chapter" -1)))
+                    (empv--send-command '("add" "chapter" -1))))
                  ("<next>" "Next Chapter"
                   (lambda ()
                     (interactive)
-                    (mpv-run-command "add" "chapter" 1)))]
+                    (empv--send-command '("add" "chapter" 1))))]
                 ["Note"
                  ("i" "Insert timestamp" org-media-note-insert-link
                   :transient nil)
@@ -164,7 +164,7 @@
                  ("j" "Toggle subtitle"
                   (lambda ()
                     (interactive)
-                    (mpv-cycle-property "sub")))
+                    (empv--send-command '("cycle" "sub"))))
                  ""
                  ("H-m" "Merge items" org-media-note-merge-item)
                  ("tM" org-media-note-set-separator
